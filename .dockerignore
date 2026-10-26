@@ -1,0 +1,7 @@
+.git
+.venv
+data
+models
+tests
+*.ipynb
+__pycache__
