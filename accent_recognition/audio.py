@@ -71,4 +71,3 @@ def extract_features(sample: AudioSample) -> np.ndarray:
     result = np.concatenate([bands.mean(axis=1), bands.std(axis=1),
                              np.percentile(bands, [10, 50, 90], axis=1).ravel()])
     return np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
-

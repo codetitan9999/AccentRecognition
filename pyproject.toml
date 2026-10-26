@@ -36,4 +36,3 @@ exclude = ["Accent_Detection.ipynb"]
 
 [tool.ruff.lint]
 ignore = ["B008"]  # FastAPI's File(...) parameter declaration is intentional.
-
