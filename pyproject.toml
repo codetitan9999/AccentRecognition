@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "accent-recognition"
+version = "0.1.0"
+description = "Train and serve an English accent classifier"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "python-multipart>=0.0.9,<1",
+  "numpy>=1.26,<3",
+  "scipy>=1.12,<2",
+  "soundfile>=0.12,<1",
+  "librosa>=0.10.2,<1",
+  "scikit-learn>=1.5,<2",
+  "joblib>=1.4,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "httpx>=0.27,<1", "ruff>=0.6,<1"]
+
+[project.scripts]
+accent-train = "accent_recognition.train:main"
+accent-prepare-saa = "accent_recognition.prepare_saa:main"
+
+[tool.setuptools.packages.find]
+include = ["accent_recognition*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["Accent_Detection.ipynb"]
+
+[tool.ruff.lint]
+ignore = ["B008"]  # FastAPI's File(...) parameter declaration is intentional.
+
