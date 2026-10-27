@@ -28,19 +28,24 @@ class AudioSample:
     speech_seconds: float
 
 
-def decode_audio(source: bytes | Path) -> AudioSample:
-    """Decode WAV/FLAC/OGG, enforce duration and speech-quality limits."""
+def decode_audio(source: bytes | Path, *, truncate_long: bool = False) -> AudioSample:
+    """Decode audio and enforce duration and speech-quality limits.
+
+    Training may crop archive recordings longer than the serving limit.
+    """
     if isinstance(source, bytes) and len(source) > MAX_BYTES:
         raise AudioError("Audio file is larger than 12 MB.")
     stream = BytesIO(source) if isinstance(source, bytes) else source
     try:
         with sf.SoundFile(stream) as file:
             duration = len(file) / file.samplerate
-            if not MIN_SECONDS <= duration <= MAX_SECONDS:
+            if duration < MIN_SECONDS or (duration > MAX_SECONDS and not truncate_long):
                 raise AudioError("Record between 2 and 30 seconds of speech.")
             if file.channels > 2 or file.samplerate < 8_000 or file.samplerate > 96_000:
                 raise AudioError("Unsupported channel count or sample rate.")
-            samples = file.read(dtype="float32", always_2d=True).mean(axis=1)
+            frames = min(len(file), int(MAX_SECONDS * file.samplerate))
+            samples = file.read(frames=frames, dtype="float32", always_2d=True).mean(axis=1)
+            duration = len(samples) / file.samplerate
             rate = file.samplerate
     except (RuntimeError, sf.LibsndfileError, ValueError) as exc:
         if isinstance(exc, AudioError):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from sklearn.calibration import CalibratedClassifierCV
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -19,7 +19,6 @@ from sklearn.metrics import (
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import SVC
 
 from .audio import AudioError, decode_audio, extract_features
 from .model import AccentModel
@@ -51,7 +50,7 @@ def train(manifest: Path, output: Path, seed: int = 42, threshold: float = 0.5) 
         speakers[speaker] = label
         audio_path = (manifest.parent / row["path"]).resolve()
         try:
-            feature = extract_features(decode_audio(audio_path))
+            feature = extract_features(decode_audio(audio_path, truncate_long=True))
         except (AudioError, OSError) as exc:
             skipped.append({"path": row["path"], "reason": str(exc)})
             continue
@@ -82,8 +81,7 @@ def train(manifest: Path, output: Path, seed: int = 42, threshold: float = 0.5) 
     train_idx, test_idx = split
     estimator = make_pipeline(
         StandardScaler(),
-        CalibratedClassifierCV(SVC(kernel="rbf", C=2.0, class_weight="balanced"),
-                               cv=2, ensemble=False),
+        LogisticRegression(class_weight="balanced", max_iter=3000, random_state=seed),
     )
     estimator.fit(X[train_idx], y[train_idx])
     predicted = estimator.predict(X[test_idx])
@@ -110,6 +108,7 @@ def train(manifest: Path, output: Path, seed: int = 42, threshold: float = 0.5) 
         "skipped": skipped,
         "seed": seed,
         "threshold": threshold,
+        "model": "standard_scaler_logistic_regression_balanced",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     artifact = AccentModel(estimator, list(estimator.classes_), threshold, metrics)
