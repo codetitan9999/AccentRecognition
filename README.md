@@ -2,7 +2,7 @@
 
 An English speech accent classifier with a browser recorder, upload flow, prediction API, and reproducible training pipeline. The original Colab exploration remains in [`Accent_Detection.ipynb`](Accent_Detection.ipynb); the application is implemented in `accent_recognition/` and `static/`.
 
-**A trained model is bundled** in `models/accent.joblib`. It predicts three first-language groups from English speech: English, Spanish, and Arabic. These are broad speech-background groups, not regional accent identities. See [MODEL_CARD.md](MODEL_CARD.md) for measured performance and limits. No accent classifier can be guaranteed perfect.
+**A trained model is bundled** in `models/accent.joblib`. It predicts five first-language groups from English speech: English, Spanish, Arabic, Mandarin, and Dutch. These are broad speech-background groups, not regional accent identities. See [MODEL_CARD.md](MODEL_CARD.md) for measured performance and limits. No accent classifier can be guaranteed perfect.
 
 ## Quick start
 
@@ -39,7 +39,7 @@ mkdir -p data
 curl -L -o data/speech-accent-archive.zip \
   'https://www.kaggle.com/api/v1/datasets/download/rtatman/speech-accent-archive?datasetVersionNumber=1'
 accent-prepare-kaggle-zip --archive data/speech-accent-archive.zip --output-dir data
-accent-train --manifest data/manifest.csv --output models/accent.joblib --threshold 0.5
+accent-train --manifest data/manifest.csv --output models/accent.joblib --seed 2026 --threshold 0.5
 ```
 
 The original notebook also references the v2 metadata CSV. If you have that Kaggle layout, generate a manifest with:
@@ -53,7 +53,7 @@ accent-prepare-saa --metadata data/speakers_all.csv \
 
 ## Model and evaluation
 
-Audio is normalized to mono 16 kHz, screened for duration and speech energy, and represented by MFCC, delta MFCC, spectral centroid, and zero-crossing summaries. A scaled, class-weighted logistic regression model produces probabilities. Training uses a seeded **speaker-disjoint** 80/20 split. `models/accent.metrics.json` records class counts, split sizes, accuracy, balanced accuracy, macro F1, classification report, confusion matrix, and coverage at the confidence threshold. Review per-class recall and errors before deploying. Probabilities are estimates, not proof of geographic origin.
+Audio is normalized to mono 16 kHz, screened for duration and speech energy, and represented by MFCC, delta MFCC, spectral centroid, and zero-crossing summaries. A scaled linear discriminant analysis model with covariance shrinkage produces probabilities. Training uses a seeded **speaker-disjoint** 80/20 split. `models/accent.metrics.json` records class counts, split sizes, accuracy, balanced accuracy, macro F1, classification report, confusion matrix, and coverage at the confidence threshold. Review per-class recall and errors before deploying. Probabilities are estimates, not proof of geographic origin.
 
 To change the abstention threshold:
 
@@ -61,7 +61,7 @@ To change the abstention threshold:
 accent-train --manifest data/manifest.csv --threshold 0.65
 ```
 
-The held-out set is used only for reporting; it does not tune the model. For production use, tune architecture and threshold with a separate validation set, then evaluate once on a locked, speaker-disjoint test set. Test on different microphones and read material as well as spontaneous speech. The Archive has every speaker read the same passage, so its evaluation alone cannot establish performance on arbitrary speech.
+The training script uses its held-out set only for reporting. The bundled model's exploratory class and classifier selection used overlapping archive recordings, so its reported evaluation is not a fully untouched test. For production use, tune architecture and threshold with a separate validation set, then evaluate once on a locked, speaker-disjoint test set. Test on different microphones and read material as well as spontaneous speech. The Archive has every speaker read the same passage, so its evaluation alone cannot establish performance on arbitrary speech.
 
 Model artifacts use `joblib` serialization, which can execute code while loading. Load only artifacts created in a trusted training environment. Deploy with a pinned artifact, dependency lock or image digest, HTTPS, ingress rate limits, resource limits, and observability appropriate to your hosting environment. The `/api/health` endpoint should be used for readiness. Avoid storing user audio unless users explicitly consent and a retention policy is in place.
 
