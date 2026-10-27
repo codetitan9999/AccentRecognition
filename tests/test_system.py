@@ -83,12 +83,15 @@ def test_bundled_model_is_loadable():
 
     artifact = Path(__file__).resolve().parent.parent / "models/accent.joblib"
     model = AccentModel.load(artifact)
-    assert model.labels == ["arabic", "english", "spanish"]
-    response = TestClient(create_app(artifact)).post(
+    assert model.labels == ["arabic", "dutch", "english", "mandarin", "spanish"]
+    client = TestClient(create_app(artifact))
+    assert client.get("/api/health").json()["labels"] == model.labels
+    response = client.post(
         "/api/predict", files={"audio": ("sample.wav", wav_bytes(180), "audio/wav")}
     )
     assert response.status_code == 200
     assert len(response.json()["alternatives"]) == 3
+    assert {item["accent"] for item in response.json()["alternatives"]} <= set(model.labels)
 
 
 def test_archive_preparation_uses_one_copy_per_speaker(tmp_path):

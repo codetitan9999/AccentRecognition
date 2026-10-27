@@ -8,7 +8,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.metrics import (
     accuracy_score,
     balanced_accuracy_score,
@@ -81,7 +81,7 @@ def train(manifest: Path, output: Path, seed: int = 42, threshold: float = 0.5) 
     train_idx, test_idx = split
     estimator = make_pipeline(
         StandardScaler(),
-        LogisticRegression(class_weight="balanced", max_iter=3000, random_state=seed),
+        LinearDiscriminantAnalysis(solver="lsqr", shrinkage=0.1),
     )
     estimator.fit(X[train_idx], y[train_idx])
     predicted = estimator.predict(X[test_idx])
@@ -108,7 +108,7 @@ def train(manifest: Path, output: Path, seed: int = 42, threshold: float = 0.5) 
         "skipped": skipped,
         "seed": seed,
         "threshold": threshold,
-        "model": "standard_scaler_logistic_regression_balanced",
+        "model": "standard_scaler_shrinkage_lda_0.1",
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     artifact = AccentModel(estimator, list(estimator.classes_), threshold, metrics)

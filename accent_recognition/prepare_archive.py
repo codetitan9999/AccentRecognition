@@ -7,7 +7,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 DEFAULT_LABELS = (
-    "english", "spanish", "arabic",
+    "english", "spanish", "arabic", "mandarin", "dutch",
 )
 FILENAME = re.compile(r"recordings/([a-z_-]+?)([0-9]+)\.mp3$")
 

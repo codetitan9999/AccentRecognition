@@ -9,6 +9,8 @@ const displayLabels = {
   arabic: 'Arabic-influenced English',
   english: 'English first-language group',
   spanish: 'Spanish-influenced English',
+  mandarin: 'Mandarin-influenced English',
+  dutch: 'Dutch-influenced English',
 };
 let selectedFile = null, mediaRecorder = null, stream = null, ticker = null, started = 0, previewUrl = null;
 
