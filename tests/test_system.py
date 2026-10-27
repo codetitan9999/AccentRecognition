@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from accent_recognition.api import create_app
 from accent_recognition.audio import AudioError, decode_audio, extract_features
 from accent_recognition.model import AccentModel
+from accent_recognition.prepare_archive import prepare
 from accent_recognition.train import train
 
 
@@ -33,6 +34,9 @@ def test_audio_validation_and_stable_features():
     assert np.array_equal(features, extract_features(sample))
     with pytest.raises(AudioError):
         decode_audio(wav_bytes(180, 1))
+    with pytest.raises(AudioError):
+        decode_audio(wav_bytes(180, 31))
+    assert decode_audio(wav_bytes(180, 31), truncate_long=True).duration_seconds == 30
     with pytest.raises(AudioError):
         decode_audio(b"not audio")
 
@@ -72,3 +76,29 @@ def test_untrained_server_reports_unavailable(tmp_path):
     client = TestClient(create_app(tmp_path / "missing.joblib"))
     assert client.get("/api/health").json()["status"] == "model_unavailable"
     assert client.post("/api/predict", files={"audio": ("voice.wav", wav_bytes(180), "audio/wav")}).status_code == 503
+
+
+def test_bundled_model_is_loadable():
+    from pathlib import Path
+
+    artifact = Path(__file__).resolve().parent.parent / "models/accent.joblib"
+    model = AccentModel.load(artifact)
+    assert model.labels == ["arabic", "english", "spanish"]
+    response = TestClient(create_app(artifact)).post(
+        "/api/predict", files={"audio": ("sample.wav", wav_bytes(180), "audio/wav")}
+    )
+    assert response.status_code == 200
+    assert len(response.json()["alternatives"]) == 3
+
+
+def test_archive_preparation_uses_one_copy_per_speaker(tmp_path):
+    from zipfile import ZipFile
+
+    archive = tmp_path / "archive.zip"
+    with ZipFile(archive, "w") as file:
+        file.writestr("recordings/english1.mp3", b"first")
+        file.writestr("recordings/recordings/english1.mp3", b"duplicate")
+        file.writestr("recordings/spanish2.mp3", b"second")
+    assert prepare(archive, tmp_path / "output") == 2
+    rows = list(csv.DictReader((tmp_path / "output/manifest.csv").open()))
+    assert {row["speaker_id"] for row in rows} == {"english-1", "spanish-2"}

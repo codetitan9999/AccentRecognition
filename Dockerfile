@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libsndfile1 && 
 COPY pyproject.toml ./
 COPY accent_recognition ./accent_recognition
 COPY static ./static
+COPY models/accent.joblib ./models/accent.joblib
 RUN pip install --no-cache-dir . && useradd --create-home --uid 10001 appuser
 USER appuser
 EXPOSE 8000

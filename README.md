@@ -2,7 +2,7 @@
 
 An English speech accent classifier with a browser recorder, upload flow, prediction API, and reproducible training pipeline. The original Colab exploration remains in [`Accent_Detection.ipynb`](Accent_Detection.ipynb); the application is implemented in `accent_recognition/` and `static/`.
 
-**A model is not bundled.** The repository has no licensed audio dataset or trained weights. Train on labeled recordings before the API can return predictions. No accent classifier can be guaranteed perfect: performance depends on label quality, speaker coverage, recording conditions, and how well deployment speech matches training speech. The API returns an uncertain result when confidence is below the configured threshold.
+**A trained model is bundled** in `models/accent.joblib`. It predicts three first-language groups from English speech: English, Spanish, and Arabic. These are broad speech-background groups, not regional accent identities. See [MODEL_CARD.md](MODEL_CARD.md) for measured performance and limits. No accent classifier can be guaranteed perfect.
 
 ## Quick start
 
@@ -11,8 +11,7 @@ Use Python 3.10 or newer:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e '.[dev]'
-accent-train --manifest data/manifest.csv --output models/accent.joblib
+pip install -e .
 uvicorn accent_recognition.api:app --host 127.0.0.1 --port 8000
 ```
 
@@ -33,18 +32,28 @@ clips/uk_001.wav,British English,speaker-003
 
 Use **accent annotations from a licensed dataset or a documented human labeling process**. A speaker must have one consistent label. The trainer needs at least two labels and three distinct speakers per label, and requires a split where every label appears on both sides. It skips invalid clips and records them in the metrics file. For trustworthy measurements, gather many more speakers and use an independent external test set drawn from the intended audience.
 
-The original notebook references the [Speech Accent Archive](https://accent.gmu.edu/). If you have downloaded its Kaggle layout yourself, generate a manifest with:
+The bundled model was trained on the [Kaggle Speech Accent Archive v1](https://www.kaggle.com/datasets/rtatman/speech-accent-archive). The archive contains two identical copies of each recording; the preparation command extracts one copy and makes a speaker-level manifest:
+
+```bash
+mkdir -p data
+curl -L -o data/speech-accent-archive.zip \
+  'https://www.kaggle.com/api/v1/datasets/download/rtatman/speech-accent-archive?datasetVersionNumber=1'
+accent-prepare-kaggle-zip --archive data/speech-accent-archive.zip --output-dir data
+accent-train --manifest data/manifest.csv --output models/accent.joblib --threshold 0.5
+```
+
+The original notebook also references the v2 metadata CSV. If you have that Kaggle layout, generate a manifest with:
 
 ```bash
 accent-prepare-saa --metadata data/speakers_all.csv \
   --recordings data/recordings/recordings --output data/manifest.csv
 ```
 
-**Caution:** `native_language` is a proxy, not a verified regional accent label. Models trained on this manifest predict groups named for first languages and should be described that way. The Kaggle copy is listed under CC BY-NC-SA 4.0; check its terms before training, distribution, or commercial use. Dataset files and weights are ignored by Git.
+**Caution:** The archive filenames and v2 `native_language` field provide first-language proxies, not verified regional accent labels. The Kaggle copy is listed under CC BY-NC-SA 4.0. The bundled weights should be treated as subject to the same noncommercial and attribution restrictions; check the source terms before reuse. Audio files are excluded from Git.
 
 ## Model and evaluation
 
-Audio is normalized to mono 16 kHz, screened for duration and speech energy, and represented by MFCC, delta MFCC, spectral centroid, and zero-crossing summaries. A scaled, class-weighted RBF SVM produces probabilities. Training uses a seeded **speaker-disjoint** 80/20 split. `models/accent.metrics.json` records class counts, split sizes, accuracy, balanced accuracy, macro F1, classification report, confusion matrix, and coverage at the confidence threshold. Review per-class recall and errors before deploying. Probabilities are estimates, not proof of geographic origin.
+Audio is normalized to mono 16 kHz, screened for duration and speech energy, and represented by MFCC, delta MFCC, spectral centroid, and zero-crossing summaries. A scaled, class-weighted logistic regression model produces probabilities. Training uses a seeded **speaker-disjoint** 80/20 split. `models/accent.metrics.json` records class counts, split sizes, accuracy, balanced accuracy, macro F1, classification report, confusion matrix, and coverage at the confidence threshold. Review per-class recall and errors before deploying. Probabilities are estimates, not proof of geographic origin.
 
 To change the abstention threshold:
 
@@ -64,16 +73,16 @@ pytest -q
 ruff check .
 ```
 
-The Docker image runs the API but does not include a model. Mount a trained `models/accent.joblib` file or set `ACCENT_MODEL_PATH` to a trusted artifact path:
+The Docker image includes the bundled model. To use a retrained model, mount your own trusted `models` directory or set `ACCENT_MODEL_PATH`:
 
 ```bash
 docker build -t accent-recognition .
-docker run --rm -p 8000:8000 -v "$PWD/models:/app/models:ro" accent-recognition
+docker run --rm -p 8000:8000 accent-recognition
 ```
 
 ## Known limits
 
 - Accent categories and errors reflect the chosen dataset; an untrained group cannot be recognized.
 - Native language, nationality, ethnicity, and accent are different concepts. Do not use the output as a reliable identity or demographic determination.
-- Calibrated probabilities from a small dataset may still be unreliable; the confidence threshold is a simple abstention rule.
+- Probabilities from this small dataset may be unreliable; the confidence threshold is a simple abstention rule.
 - Background noise, very short samples, illness, and code switching can reduce reliability.
