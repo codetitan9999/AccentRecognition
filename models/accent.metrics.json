@@ -1,0 +1,75 @@
+{
+  "train_samples": 674,
+  "test_samples": 169,
+  "train_speakers": 674,
+  "test_speakers": 169,
+  "class_counts": {
+    "arabic": 102,
+    "english": 579,
+    "spanish": 162
+  },
+  "accuracy": 0.6568,
+  "balanced_accuracy": 0.5882,
+  "macro_f1": 0.5769,
+  "coverage_at_threshold": 0.9645,
+  "accuracy_at_threshold": 0.6626,
+  "confusion_matrix": [
+    [
+      14,
+      3,
+      9
+    ],
+    [
+      6,
+      79,
+      20
+    ],
+    [
+      9,
+      11,
+      18
+    ]
+  ],
+  "classification_report": {
+    "arabic": {
+      "precision": 0.4827586206896552,
+      "recall": 0.5384615384615384,
+      "f1-score": 0.509090909090909,
+      "support": 26.0
+    },
+    "english": {
+      "precision": 0.8494623655913979,
+      "recall": 0.7523809523809524,
+      "f1-score": 0.797979797979798,
+      "support": 105.0
+    },
+    "spanish": {
+      "precision": 0.3829787234042553,
+      "recall": 0.47368421052631576,
+      "f1-score": 0.4235294117647059,
+      "support": 38.0
+    },
+    "accuracy": 0.6568047337278107,
+    "macro avg": {
+      "precision": 0.5717332365617694,
+      "recall": 0.5881755671229355,
+      "f1-score": 0.576866706278471,
+      "support": 169.0
+    },
+    "weighted avg": {
+      "precision": 0.6881565918011213,
+      "recall": 0.6568047337278107,
+      "f1-score": 0.6693394087059246,
+      "support": 169.0
+    }
+  },
+  "labels": [
+    "arabic",
+    "english",
+    "spanish"
+  ],
+  "skipped": [],
+  "seed": 42,
+  "threshold": 0.5,
+  "model": "standard_scaler_logistic_regression_balanced"
+}
