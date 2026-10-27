@@ -5,7 +5,17 @@ const preview = document.querySelector('#preview');
 const message = document.querySelector('#message');
 const timer = document.querySelector('#timer');
 const result = document.querySelector('#result');
+const displayLabels = {
+  arabic: 'Arabic-influenced English',
+  english: 'English first-language group',
+  spanish: 'Spanish-influenced English',
+};
 let selectedFile = null, mediaRecorder = null, stream = null, ticker = null, started = 0, previewUrl = null;
+
+if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+  recordButton.disabled = true;
+  message.textContent = 'Microphone recording needs HTTPS or localhost in a supported browser. You can still upload audio.';
+}
 
 function showFile(file) {
   selectedFile = file;
@@ -22,19 +32,40 @@ upload.addEventListener('change', () => { if (upload.files[0]) showFile(upload.f
 
 recordButton.addEventListener('click', async () => {
   if (mediaRecorder?.state === 'recording') { mediaRecorder.stop(); return; }
+  message.textContent = 'Allow microphone access in your browser to start recording…';
+  recordButton.disabled = true;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    let expired = false;
+    const request = navigator.mediaDevices.getUserMedia({ audio: true });
+    request.then(mic => { if (expired) mic.getTracks().forEach(track => track.stop()); }).catch(() => {});
+    let permissionTimer;
+    try {
+      stream = await Promise.race([
+        request,
+        new Promise((_, reject) => {
+          permissionTimer = setTimeout(() => {
+            expired = true;
+            reject(new Error('Microphone permission timed out. Check browser permissions, then try again.'));
+          }, 15000);
+        }),
+      ]);
+    } finally { clearTimeout(permissionTimer); }
+    if (!window.MediaRecorder) throw new Error('This browser does not support microphone recording. Upload a WAV file instead.');
     const chunks = [];
-    const mimeType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus'].find(MediaRecorder.isTypeSupported);
+    const mimeType = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4']
+      .find(type => MediaRecorder.isTypeSupported(type));
     mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
     mediaRecorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
     mediaRecorder.onstop = async () => {
       clearInterval(ticker);
       stream.getTracks().forEach(track => track.stop());
       recordButton.textContent = '● Start recording';
+      recordButton.disabled = false;
       try {
         const source = new Blob(chunks, { type: mediaRecorder.mimeType });
-        const context = new AudioContext();
+        const Context = window.AudioContext || window.webkitAudioContext;
+        if (!Context) throw new Error('Audio decoding is unavailable in this browser.');
+        const context = new Context();
         const decoded = await context.decodeAudioData(await source.arrayBuffer());
         const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * 16000), 16000);
         const player = offline.createBufferSource(); player.buffer = decoded;
@@ -55,16 +86,28 @@ recordButton.addEventListener('click', async () => {
         await context.close();
       } catch (error) { message.textContent = `Could not process recording: ${error.message}`; }
     };
+    mediaRecorder.onerror = () => {
+      clearInterval(ticker);
+      stream.getTracks().forEach(track => track.stop());
+      recordButton.textContent = '● Start recording';
+      recordButton.disabled = false;
+      message.textContent = 'Recording failed. Check microphone permissions or upload an audio file.';
+    };
     mediaRecorder.start();
     started = Date.now();
     recordButton.textContent = '■ Stop recording';
+    recordButton.disabled = false;
     message.textContent = 'Recording…';
     ticker = setInterval(() => {
       const seconds = Math.floor((Date.now() - started) / 1000);
       timer.textContent = `${seconds}s / 30s`;
       if (seconds >= 30 && mediaRecorder.state === 'recording') mediaRecorder.stop();
     }, 250);
-  } catch (error) { message.textContent = `Microphone unavailable: ${error.message}`; }
+  } catch (error) {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    recordButton.disabled = false;
+    message.textContent = `Microphone unavailable: ${error.message}`;
+  }
 });
 
 analyze.addEventListener('click', async () => {
@@ -76,7 +119,8 @@ analyze.addEventListener('click', async () => {
     const response = await fetch('/api/predict', { method: 'POST', body: form });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'Analysis failed.');
-    document.querySelector('#result-title').textContent = data.uncertain ? 'Uncertain result' : data.accent;
+    document.querySelector('#result-title').textContent = data.uncertain
+      ? 'Uncertain result' : (displayLabels[data.accent] || data.accent);
     document.querySelector('#result-detail').textContent = data.uncertain
       ? 'The model could not make a confident prediction. Try a longer, clearer sample.'
       : `Estimated match: ${Math.round(data.confidence * 100)}%. Based on ${data.speech_seconds}s of detected speech.`;
@@ -84,7 +128,7 @@ analyze.addEventListener('click', async () => {
     data.alternatives.forEach(item => {
       const row = document.createElement('div'); row.className = 'bar-row';
       const label = document.createElement('span');
-      const name = document.createElement('b'); name.textContent = item.accent;
+      const name = document.createElement('b'); name.textContent = displayLabels[item.accent] || item.accent;
       const percent = document.createElement('small'); percent.textContent = `${Math.round(item.confidence * 100)}%`;
       label.append(name, percent);
       const bar = document.createElement('div'); bar.className = 'bar';
@@ -98,6 +142,6 @@ analyze.addEventListener('click', async () => {
 
 fetch('/api/health').then(r => r.json()).then(data => {
   document.querySelector('#model-status').textContent = data.model_loaded
-    ? `Ready · ${data.labels.length} accents` : 'Model needs training';
-  if (!data.model_loaded) message.textContent = 'Train a model to enable analysis. See the README.';
+    ? `Ready · ${data.labels.length} groups` : 'Model needs training';
+  if (!data.model_loaded && !recordButton.disabled) message.textContent = 'Train a model to enable analysis. See the README.';
 }).catch(() => { document.querySelector('#model-status').textContent = 'Server unavailable'; });
